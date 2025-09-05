@@ -47,6 +47,7 @@ provider "tls" {}
 module "console" {
   source       = "./console"
   project_name = var.project_name
+  api_endpoint = module.backend.api_url
 
   providers = {
     aws.aws-us = aws.aws-us

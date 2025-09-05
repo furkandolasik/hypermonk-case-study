@@ -12,6 +12,11 @@ variable "project_name" {
   description = "Project name for resource naming"
 }
 
+variable "api_endpoint" {
+  type        = string
+  description = "API Gateway endpoint URL from backend module"
+}
+
 # S3 bucket for static website hosting
 resource "aws_s3_bucket" "bucket" {
   bucket        = "${var.project_name}-console-${random_string.bucket_suffix.result}"
@@ -76,7 +81,7 @@ resource "null_resource" "build" {
 
     environment = {
       # API Endpoints - using CloudFront distribution domain
-      VITE_API_INVOKE_URL = "https://${aws_cloudfront_distribution.s3_distribution.domain_name}/api/v1"
+      VITE_API_INVOKE_URL = "${var.api_endpoint}/v1"
     }
   }
 
