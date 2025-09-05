@@ -1,0 +1,26 @@
+{
+  "name": "lmky",
+  "version": "1.0.0",
+  "workspaces": [
+    "console",
+    "backend",
+    "libs/*"
+  ],
+  "scripts": {
+    "prepare": "husky install",
+    "plan": "terraform plan",
+    "predeploy": "cd backend && npm run build",
+    "deploy": "terraform apply -auto-approve",
+    "destroy": "terraform destroy",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type:check": "npm run type:check --ws --if-present",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "eslint": "^8.57.0",
+    "husky": "^8.0.3",
+    "prettier": "^2.8.8"
+  }
+}

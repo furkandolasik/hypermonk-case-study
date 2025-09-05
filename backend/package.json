@@ -1,0 +1,29 @@
+{
+  "name": "smart-sky",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build": "npm run build:api",
+   "build:api": "esbuild --sourcemap --bundle --platform=node --target=node18 --format=cjs --outfile=dist/api/index.js src/api/index.lambda.ts",
+   "dev": "nodemon src/api/index.local.ts",
+    "start": "ts-node dist/index.local.ts",
+    "type:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hypermonkcase/idgen": "^1.0.0",
+    "@hypermonkcase/repository": "^1.0.0",
+    "@vendia/serverless-express": "^4.12.6",
+    "aws-sdk": "^2.1692.0",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/node": "^20.11.15",
+    "esbuild": "^0.23.0",
+    "nodemon": "^3.1.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

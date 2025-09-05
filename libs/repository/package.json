@@ -1,0 +1,10 @@
+{
+  "name": "@hypermonkcase/repository",
+  "private": true,
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.209.0",
+    "@aws-sdk/lib-dynamodb": "^3.229.0"
+  }
+}
