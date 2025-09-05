@@ -1,2 +1,2 @@
 # hypermonk-case-study
-Hypermon Case Study
+Hypermonk Case Study
