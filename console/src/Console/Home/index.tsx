@@ -7,7 +7,7 @@ import api from '../../api';
 export default function Home() {
   const getCoins = async () => {
     try {
-      const response = await api.get('/coins');
+      const response = await api.get('/price-data');
       console.log('Coins data:', response);
     } catch (error) {
       console.error('Error fetching coins:', error);
