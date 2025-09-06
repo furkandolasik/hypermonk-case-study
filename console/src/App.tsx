@@ -1,6 +1,6 @@
 import { Routes, Route, BrowserRouter, Navigate } from 'react-router-dom';
 import NotFoundPage from './NotFoundPage';
-import Home from './Console/Home';
+import Home from './Console/Dashboard';
 import Login from './Console/Auth/Login';
 
 function App() {

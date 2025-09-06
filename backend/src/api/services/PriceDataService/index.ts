@@ -82,7 +82,6 @@ class PriceDataService {
     };
   }
 
-  // Existing method for fetching and storing from CoinGecko
   async fetchAndStorePrices(coins: string[], currencies: string[]) {
     const items = [];
 
@@ -97,6 +96,9 @@ class PriceDataService {
             page: 1,
             sparkline: false,
           },
+          headers: {
+            'x-cg-pro-api-key': process.env.COINGECKO_API_KEY,
+          },
         });
 
         for (const market of response.data) {
@@ -107,10 +109,6 @@ class PriceDataService {
             currency: currency,
             timestamp: timestamp,
             price: market.current_price,
-            market_cap: market.market_cap,
-            volume_24h: market.total_volume,
-            price_change_24h: market.price_change_percentage_24h,
-            granularity: 'hourly',
           };
 
           await this.repos.priceData.put(
@@ -125,6 +123,60 @@ class PriceDataService {
       }
     }
 
+    return items;
+  }
+
+  async fetchHistoricalPrices(coins: string[], currencies: string[], days: number = 30) {
+    const items = [];
+
+    console.log(
+      `Fetching ${days} days of hourly historical data for ${coins.length} coins and ${currencies.length} currencies`
+    );
+
+    for (const coin of coins) {
+      for (const currency of currencies) {
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          const response = await axios.get(`https://api.coingecko.com/api/v3/coins/${coin}/market_chart`, {
+            params: {
+              vs_currency: currency,
+              days: days,
+              interval: 'hourly',
+            },
+            headers: {
+              'x-cg-pro-api-key': process.env.COINGECKO_API_KEY,
+            },
+          });
+
+          const { prices } = response.data;
+          console.log(`Processing ${coin}-${currency}: ${prices.length} hourly data points`);
+
+          for (const [timestamp_ms, price] of prices) {
+            const timestamp = new Date(timestamp_ms).toISOString();
+
+            const priceData: PriceData = {
+              coin_id: coin,
+              timestamp_currency: `${timestamp}#${currency}`,
+              currency: currency,
+              timestamp: timestamp,
+              price: price,
+            };
+
+            await this.repos.priceData.put(
+              { coin_id: coin, timestamp_currency: `${timestamp}#${currency}` },
+              priceData
+            );
+
+            items.push(priceData);
+          }
+        } catch (error) {
+          console.error(`Error fetching historical data for ${coin}-${currency}:`, error);
+        }
+      }
+    }
+
+    console.log(`Historical hourly data fetch completed: ${items.length} items stored`);
     return items;
   }
 }

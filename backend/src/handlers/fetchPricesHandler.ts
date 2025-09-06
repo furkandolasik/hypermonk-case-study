@@ -1,7 +1,7 @@
 import DynamoDB from '@hypermonkcase/repository/DynamoDB';
 import PriceDataService, { PriceData } from '../api/services/PriceDataService';
 
-export const handler = async () => {
+export const handler = async (event: any) => {
   console.log('Fetching prices...');
 
   const priceDataRepo = DynamoDB.from<{ coin_id: string; timestamp_currency: string }, PriceData>(
@@ -17,6 +17,15 @@ export const handler = async () => {
   const priceDataService = PriceDataService.create({
     priceData: priceDataRepo,
   });
+
+  if (event.action === 'fetch-historical') {
+    const coins = event.coins || ['bitcoin', 'ethereum', 'dogecoin'];
+    const currencies = event.currencies || ['usd', 'try'];
+    const days = event.days || 30;
+
+    const result = await priceDataService.fetchHistoricalPrices(coins, currencies, days);
+    return { success: true, message: `${result.length} historical records stored` };
+  }
 
   const coins = ['bitcoin', 'ethereum'];
   const currencies = ['usd', 'eur', 'try'];

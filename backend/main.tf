@@ -198,7 +198,8 @@ resource "aws_lambda_function" "price_fetcher" {
 
   environment {
     variables = {
-      PRICE_DATA_TABLE = aws_dynamodb_table.price_data.name
+      PRICE_DATA_TABLE  = aws_dynamodb_table.price_data.name
+      COINGECKO_API_KEY = "CG-BVC9WsHt56tCVMvW2AadTR9M"
     }
   }
 
@@ -243,8 +244,8 @@ resource "aws_apigatewayv2_route" "protected" {
 # Scheduled task for price fetching
 resource "aws_cloudwatch_event_rule" "price_fetch_rule" {
   name                = "${var.project_name}-fetch-prices"
-  description         = "Trigger price fetching every 5 minutes"
-  schedule_expression = "rate(5 minutes)"
+  description         = "Trigger price fetching every 1 hour"
+  schedule_expression = "rate(1 hour)"
 
   tags = {
     Name    = "${var.project_name}-fetch-prices"
