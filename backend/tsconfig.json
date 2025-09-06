@@ -16,7 +16,10 @@
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "outDir": "./dist",           
+    "rootDir": "./src"            
   },
-  "exclude": ["node_modules", "cdk.out"]
+  "include": ["src/**/*"],        
+  "exclude": ["node_modules", "cdk.out", "dist"]
 }

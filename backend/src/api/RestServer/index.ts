@@ -1,11 +1,11 @@
 import express, { Request, Response } from 'express';
 
-import CoinService from '../services/CoinService';
+import PriceDataService from '../services/PriceDataService';
 
-import CoinRouter from './CoinRouter';
+import PriceDataRouter from './PriceDataRouter';
 
 interface RestServerServices {
-  coinService: CoinService;
+  priceDataService: PriceDataService;
 }
 
 class RestServer {
@@ -22,7 +22,7 @@ class RestServer {
       return next();
     });
 
-    router.use('/coins', CoinRouter.create(this.services).getRouter());
+    router.use('/price-data', PriceDataRouter.create(this.services).getRouter());
 
     return router;
   }

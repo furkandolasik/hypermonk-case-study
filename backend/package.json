@@ -3,9 +3,10 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "build": "npm run build:api",
-   "build:api": "esbuild --sourcemap --bundle --platform=node --target=node18 --format=cjs --outfile=dist/api/index.js src/api/index.lambda.ts",
-   "dev": "nodemon src/api/index.local.ts",
+    "build": "npm run build:api && npm run build:handler",
+    "build:api": "esbuild --sourcemap --bundle --platform=node --target=node18 --format=cjs --outfile=dist/api/index.js src/api/index.lambda.ts",
+    "build:handler": "esbuild --sourcemap --bundle --platform=node --target=node18 --format=cjs --outfile=dist/handlers/fetchPricesHandler.js src/handlers/fetchPricesHandler.ts",
+    "dev": "nodemon src/api/index.local.ts",
     "start": "ts-node dist/index.local.ts",
     "type:check": "tsc --noEmit"
   },
