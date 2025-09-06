@@ -1,11 +1,11 @@
 export interface PriceData {
   coin_id: string;
   timestamp_currency: string;
-  timestamp: string;
   currency: string;
+  timestamp: string;
   price: number;
   market_cap?: number;
-  total_volume?: number;
-  createdAt?: number;
-  updatedAt?: string;
+  volume_24h?: number;
+  price_change_24h?: number;
+  granularity: 'hourly' | 'daily';
 }
