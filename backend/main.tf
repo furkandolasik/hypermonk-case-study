@@ -12,52 +12,96 @@ variable "project_name" {
   description = "Project name for resource naming"
 }
 
-# DynamoDB Table
-resource "aws_dynamodb_table" "Adverts" {
-  name         = "${var.project_name}-Adverts"
+# DynamoDB Tables for Crypto Dashboard
+
+# 1. CryptoCoins Table
+resource "aws_dynamodb_table" "crypto_coins" {
+  name         = "${var.project_name}-CryptoCoins"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "id"
+  hash_key     = "coin_id"
 
   attribute {
-    name = "id"
+    name = "coin_id"
+    type = "S"
+  }
+
+  tags = {
+    Name    = "${var.project_name}-CryptoCoins"
+    Project = var.project_name
+  }
+}
+
+# 2. SupportedCurrencies Table
+resource "aws_dynamodb_table" "supported_currencies" {
+  name         = "${var.project_name}-SupportedCurrencies"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "currency_code"
+
+  attribute {
+    name = "currency_code"
+    type = "S"
+  }
+
+  tags = {
+    Name    = "${var.project_name}-SupportedCurrencies"
+    Project = var.project_name
+  }
+}
+
+# 3. PriceData Table (Main table for price history)
+resource "aws_dynamodb_table" "price_data" {
+  name         = "${var.project_name}-PriceData"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "coin_id"
+  range_key    = "timestamp_currency"
+
+  attribute {
+    name = "coin_id"
     type = "S"
   }
 
   attribute {
-    name = "serverId"
+    name = "timestamp_currency"
     type = "S"
   }
 
   attribute {
-    name = "userId"
+    name = "currency"
     type = "S"
   }
 
+  attribute {
+    name = "timestamp"
+    type = "S"
+  }
+
+  # GSI for querying by currency
   global_secondary_index {
-    name            = "serverId-id"
-    hash_key        = "serverId"
-    range_key       = "id"
+    name            = "currency-timestamp_currency-index"
+    hash_key        = "currency"
+    range_key       = "timestamp_currency"
     projection_type = "ALL"
   }
 
+  # GSI for querying by timestamp across all coins
   global_secondary_index {
-    name            = "userId-id"
-    hash_key        = "userId"
-    range_key       = "id"
+    name            = "timestamp-coin_id-index"
+    hash_key        = "timestamp"
+    range_key       = "coin_id"
     projection_type = "ALL"
   }
 
   tags = {
-    Name    = "${var.project_name}-Adverts"
+    Name    = "${var.project_name}-PriceData"
     Project = var.project_name
   }
 }
 
 # Api Gateway
 resource "aws_apigatewayv2_api" "main" {
-  name          = "${var.project_name}-api"
+  name          = "${var.project_name}-crypto-api"
   protocol_type = "HTTP"
-  description   = "${var.project_name} API Gateway"
+  description   = "${var.project_name} Crypto Dashboard API"
 
   cors_configuration {
     allow_headers = ["content-type", "x-amz-date", "authorization", "x-api-key", "x-amz-security-token"]
@@ -66,7 +110,7 @@ resource "aws_apigatewayv2_api" "main" {
   }
 
   tags = {
-    Name    = "${var.project_name}-api"
+    Name    = "${var.project_name}-crypto-api"
     Project = var.project_name
   }
 }
@@ -77,7 +121,7 @@ resource "aws_apigatewayv2_stage" "default" {
   auto_deploy = true
 
   tags = {
-    Name    = "${var.project_name}-api-stage"
+    Name    = "${var.project_name}-crypto-api-stage"
     Project = var.project_name
   }
 }
@@ -102,7 +146,7 @@ data "archive_file" "api" {
 }
 
 resource "aws_iam_role" "default" {
-  name = "${var.project_name}-APILambdaRole"
+  name = "${var.project_name}-CryptoAPILambdaRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -118,7 +162,7 @@ resource "aws_iam_role" "default" {
   })
 
   inline_policy {
-    name = "${var.project_name}-APILambdaPolicy"
+    name = "${var.project_name}-CryptoAPILambdaPolicy"
     policy = jsonencode({
       Version = "2012-10-17",
       Statement = [
@@ -129,8 +173,6 @@ resource "aws_iam_role" "default" {
             "logs:CreateLogGroup",
             "logs:PutLogEvents",
             "dynamodb:*",
-            "cognito-idp:*",
-            "s3:*",
           ],
           Resource = "*"
         }
@@ -139,13 +181,13 @@ resource "aws_iam_role" "default" {
   }
 
   tags = {
-    Name    = "${var.project_name}-lambda-role"
+    Name    = "${var.project_name}-crypto-lambda-role"
     Project = var.project_name
   }
 }
 
 resource "aws_lambda_function" "api" {
-  function_name = "${var.project_name}-api"
+  function_name = "${var.project_name}-crypto-api"
   role          = aws_iam_role.default.arn
   handler       = "index.handler"
 
@@ -158,13 +200,19 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE_NAME = aws_dynamodb_table.Adverts.name
-      PROJECT_NAME        = var.project_name
+      # DynamoDB Table Names
+      CRYPTO_COINS_TABLE = aws_dynamodb_table.crypto_coins.name
+      CURRENCIES_TABLE   = aws_dynamodb_table.supported_currencies.name
+      PRICE_DATA_TABLE   = aws_dynamodb_table.price_data.name
+      PROJECT_NAME       = var.project_name
+      # CoinGecko Configuration
+      SUPPORTED_COINS      = "bitcoin,ethereum,tether,ripple,binancecoin,solana,dogecoin,tron,cardano"
+      SUPPORTED_CURRENCIES = "usd,eur,try"
     }
   }
 
   tags = {
-    Name    = "${var.project_name}-api"
+    Name    = "${var.project_name}-crypto-api"
     Project = var.project_name
   }
 }
@@ -181,7 +229,7 @@ resource "aws_apigatewayv2_integration" "default" {
   api_id                 = aws_apigatewayv2_api.main.id
   integration_type       = "AWS_PROXY"
   connection_type        = "INTERNET"
-  description            = "Lambda integration for ${var.project_name}"
+  description            = "Lambda integration for ${var.project_name} crypto API"
   integration_method     = "POST"
   integration_uri        = aws_lambda_function.api.invoke_arn
   passthrough_behavior   = "WHEN_NO_MATCH"
@@ -214,6 +262,11 @@ output "lambda_function_name" {
   value = aws_lambda_function.api.function_name
 }
 
-output "dynamodb_table_name" {
-  value = aws_dynamodb_table.Adverts.name
+output "crypto_tables" {
+  value = {
+    coins      = aws_dynamodb_table.crypto_coins.name
+    currencies = aws_dynamodb_table.supported_currencies.name
+    price_data = aws_dynamodb_table.price_data.name
+  }
+  description = "DynamoDB table names for crypto data"
 }
