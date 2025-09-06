@@ -12,7 +12,7 @@ variable "project_name" {
   description = "Project name for resource naming"
 }
 
-variable "api_endpoint" {
+variable "api_url" {
   type        = string
   description = "API Gateway endpoint URL from backend module"
 }
@@ -81,7 +81,7 @@ resource "null_resource" "build" {
 
     environment = {
       # API Endpoints - using CloudFront distribution domain
-      VITE_API_INVOKE_URL = "${var.api_endpoint}/v1"
+      VITE_API_INVOKE_URL = "${var.api_url}"
     }
   }
 
