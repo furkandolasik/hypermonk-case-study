@@ -17,7 +17,6 @@ class RestServer {
 
   async getRequestHandler(): Promise<express.RequestHandler> {
     const router = express.Router();
-    console.log('Setting up routes');
     router.use(async (req: Request, res: Response, next) => {
       return next();
     });
