@@ -242,14 +242,29 @@ const CryptoDashboard: React.FC = () => {
     }));
   };
 
+  const handleDateRangeSelect = (startDate: string, endDate: string) => {
+    const newStartDate = dayjs(startDate.split(' ')[0]);
+    const newEndDate = dayjs(endDate.split(' ')[0]);
+
+    setFilters((prev) => ({
+      ...prev,
+      dateRange: [newStartDate, newEndDate],
+    }));
+  };
+
+  const handleResetZoom = () => {
+    const newDateRange: [dayjs.Dayjs, dayjs.Dayjs] = [dayjs().subtract(7, 'days'), dayjs()];
+
+    setFilters((prev) => ({
+      ...prev,
+      dateRange: newDateRange,
+    }));
+  };
+
   return (
     <ConsoleLayout
       content={
-        <div style={{ padding: '24px', width: '100%' }}>
-          <Title level={2} style={{ color: 'white' }}>
-            Cryptocurrency Price Dashboard
-          </Title>
-
+        <div style={{ padding: '12px', width: '100%' }}>
           <PriceFilters
             filters={filters}
             availableCoins={availableCoins}
@@ -260,7 +275,12 @@ const CryptoDashboard: React.FC = () => {
           <Spin spinning={loading}>
             <Tabs defaultActiveKey="chart" type="card">
               <Tabs.TabPane tab="Chart" key="chart">
-                <PriceChart chartData={chartData} currencies={filters.currencies} />
+                <PriceChart
+                  chartData={chartData}
+                  currencies={filters.currencies}
+                  onDateRangeSelect={handleDateRangeSelect}
+                  onResetZoom={handleResetZoom}
+                />
               </Tabs.TabPane>
 
               <Tabs.TabPane tab="Table" key="table">
