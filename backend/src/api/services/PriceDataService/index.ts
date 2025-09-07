@@ -2,6 +2,16 @@ import Repository from '@hypermonkcase/repository';
 import axios from 'axios';
 import { PriceData } from './entities';
 
+interface ProcessedDataPoint {
+  date: string;
+  coin?: string;
+  currency?: string;
+  price: number;
+  sourceRecords?: number;
+  aggregatedCoins?: string[];
+  aggregatedCurrencies?: string[];
+}
+
 class PriceDataService {
   constructor(
     private readonly repos: { priceData: Repository<{ coin_id: string; timestamp_currency: string }, PriceData> }
@@ -11,49 +21,184 @@ class PriceDataService {
     return new PriceDataService(repos);
   }
 
-  // Get price history for frontend API
-  async getPriceHistory(params: { coin?: string; currency?: string; from?: string; to?: string }) {
-    const { coin, currency, from, to } = params;
-    // If coin is specified, use primary key query
-    if (coin) {
-      const queryResult = await this.repos.priceData.query({
-        index: 'coin_id', // primary partition key
-        partition: coin,
-        filter: this.buildFilterPredicate({ currency, from, to }),
-      });
+  // Get processed price history for frontend API
+  async getPriceHistory(params: {
+    coins?: string[];
+    currencies?: string[];
+    from?: string;
+    to?: string;
+    breakdownDimensions?: string[];
+  }) {
+    const {
+      coins = ['bitcoin', 'ethereum'],
+      currencies = ['usd', 'try'],
+      from,
+      to,
+      breakdownDimensions = ['date'],
+    } = params;
 
-      return queryResult.items.map((item) => item.value);
+    // Fetch raw data for all coin-currency combinations
+    const rawData: PriceData[] = [];
+
+    for (const coin of coins) {
+      try {
+        const queryResult = await this.repos.priceData.query({
+          index: 'coin_id',
+          partition: coin,
+          filter: this.buildFilterPredicate({ currencies, from, to }),
+        });
+
+        rawData.push(...queryResult.items.map((item) => item.value));
+      } catch (error) {
+        console.error(`Error fetching data for coin ${coin}:`, error);
+      }
     }
 
-    // If currency is specified but not coin, use GSI
-    if (currency && !coin) {
-      const queryResult = await this.repos.priceData.query({
-        index: 'currency-timestamp_currency-index',
-        partition: currency,
-        filter: this.buildFilterPredicate({ from, to }),
-      });
-
-      return queryResult.items.map((item) => item.value);
+    if (rawData.length === 0) {
+      return [];
     }
 
-    // If no primary filters, scan with filter
-    const scanResult = await this.repos.priceData.query({
-      filter: this.buildFilterPredicate({ currency, from, to }),
+    // Process the raw data based on breakdown dimensions
+    return this.processDataForAPI(rawData, breakdownDimensions, from, to);
+  }
+
+  // Process raw data into aggregated format
+  private processDataForAPI(
+    rawData: PriceData[],
+    breakdownDimensions: string[],
+    fromDate?: string,
+    toDate?: string
+  ): ProcessedDataPoint[] {
+    if (rawData.length === 0) return [];
+
+    // Determine if we should use hourly or daily aggregation
+    const daysDiff =
+      fromDate && toDate
+        ? Math.ceil((new Date(toDate).getTime() - new Date(fromDate).getTime()) / (1000 * 60 * 60 * 24))
+        : 7;
+    const useHourly = daysDiff <= 2;
+
+    // Group data based on breakdown dimensions and time period
+    const groups = new Map<string, PriceData[]>();
+
+    rawData.forEach((item) => {
+      // Format timestamp based on granularity
+      const date = new Date(item.timestamp);
+      const timeKey = useHourly
+        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(
+            2,
+            '0'
+          )} ${String(date.getHours()).padStart(2, '0')}:00`
+        : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(
+            2,
+            '0'
+          )}`;
+
+      // Create grouping key based on breakdown dimensions
+      const keyParts = [timeKey];
+
+      if (breakdownDimensions.includes('coin')) {
+        keyParts.push(item.coin_id);
+      }
+      if (breakdownDimensions.includes('currency')) {
+        keyParts.push(item.currency);
+      }
+
+      const groupKey = keyParts.join('|');
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, []);
+      }
+      groups.get(groupKey)!.push(item);
     });
 
-    return scanResult.items.map((item) => item.value);
+    // Process each group and calculate averages
+    const processedData: ProcessedDataPoint[] = [];
+
+    groups.forEach((items, groupKey) => {
+      const keyParts = groupKey.split('|');
+      const timeKey = keyParts[0];
+
+      // Calculate average price for this group
+      const avgPrice = items.reduce((sum, item) => sum + item.price, 0) / items.length;
+
+      // Create the processed data point
+      const dataPoint: ProcessedDataPoint = {
+        date: timeKey,
+        price: avgPrice,
+      };
+
+      // Add breakdown-specific properties
+      let partIndex = 1;
+      if (breakdownDimensions.includes('coin')) {
+        dataPoint.coin = keyParts[partIndex];
+        partIndex++;
+      }
+      if (breakdownDimensions.includes('currency')) {
+        dataPoint.currency = keyParts[partIndex];
+        partIndex++;
+      }
+
+      // Add metadata about the aggregation
+      dataPoint.sourceRecords = items.length;
+
+      // If we're aggregating across multiple coins/currencies, show which ones
+      if (!breakdownDimensions.includes('coin')) {
+        const uniqueCoins = Array.from(new Set(items.map((i) => i.coin_id)));
+        dataPoint.aggregatedCoins = uniqueCoins;
+      }
+      if (!breakdownDimensions.includes('currency')) {
+        const uniqueCurrencies = Array.from(new Set(items.map((i) => i.currency)));
+        dataPoint.aggregatedCurrencies = uniqueCurrencies;
+      }
+
+      processedData.push(dataPoint);
+    });
+
+    // Sort by date, then by coin, then by currency
+    processedData.sort((a, b) => {
+      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (dateCompare !== 0) return dateCompare;
+
+      if (a.coin && b.coin) {
+        const coinCompare = a.coin.localeCompare(b.coin);
+        if (coinCompare !== 0) return coinCompare;
+      }
+
+      if (a.currency && b.currency) {
+        return a.currency.localeCompare(b.currency);
+      }
+
+      return 0;
+    });
+
+    return processedData;
   }
 
   // Build filter predicate using the adapter's filter system
-  private buildFilterPredicate(params: { currency?: string; from?: string; to?: string }) {
+  private buildFilterPredicate(params: { currencies?: string[]; from?: string; to?: string }) {
     const conditions = [];
 
-    if (params.currency) {
-      conditions.push({
-        operator: '=' as const,
-        lhs: { name: 'currency' },
-        rhs: params.currency,
-      });
+    if (params.currencies && params.currencies.length > 0) {
+      if (params.currencies.length === 1) {
+        conditions.push({
+          operator: '=' as const,
+          lhs: { name: 'currency' },
+          rhs: params.currencies[0],
+        });
+      } else {
+        // Multiple currencies - create OR condition
+        const currencyConditions = params.currencies.map((currency) => ({
+          operator: '=' as const,
+          lhs: { name: 'currency' },
+          rhs: currency,
+        }));
+
+        conditions.push({
+          operator: 'OR' as const,
+          predicates: currencyConditions,
+        });
+      }
     }
 
     if (params.from) {
@@ -75,13 +220,13 @@ class PriceDataService {
     if (conditions.length === 0) return undefined;
     if (conditions.length === 1) return conditions[0];
 
-    // Combine multiple conditions with AND
     return {
       operator: 'AND' as const,
       predicates: conditions,
     };
   }
 
+  // Keep existing methods for scheduled lambda
   async fetchAndStorePrices(coins: string[], currencies: string[]) {
     const items = [];
 
@@ -94,10 +239,9 @@ class PriceDataService {
             order: 'market_cap_desc',
             per_page: 250,
             page: 1,
-            sparkline: false,
           },
           headers: {
-            'x-cg-pro-api-key': process.env.COINGECKO_API_KEY,
+            'x-cg-demo-api-key': process.env.COINGECKO_API_KEY,
           },
         });
 
@@ -130,7 +274,7 @@ class PriceDataService {
     const items = [];
 
     console.log(
-      `Fetching ${days} days of hourly historical data for ${coins.length} coins and ${currencies.length} currencies`
+      `Fetching ${days} days of historical data for ${coins.length} coins and ${currencies.length} currencies`
     );
 
     for (const coin of coins) {
@@ -142,15 +286,13 @@ class PriceDataService {
             params: {
               vs_currency: currency,
               days: days,
-              interval: 'hourly',
             },
             headers: {
-              'x-cg-pro-api-key': process.env.COINGECKO_API_KEY,
+              'x-cg-demo-api-key': process.env.COINGECKO_API_KEY,
             },
           });
 
           const { prices } = response.data;
-          console.log(`Processing ${coin}-${currency}: ${prices.length} hourly data points`);
 
           for (const [timestamp_ms, price] of prices) {
             const timestamp = new Date(timestamp_ms).toISOString();
@@ -176,11 +318,10 @@ class PriceDataService {
       }
     }
 
-    console.log(`Historical hourly data fetch completed: ${items.length} items stored`);
+    console.log(`Historical data fetch completed: ${items.length} items stored`);
     return items;
   }
 }
 
 export default PriceDataService;
-
 export * from './entities';

@@ -14,15 +14,16 @@ class PriceRouter {
 
   async getPrices(req: Request, res: Response) {
     try {
-      const { coin, currency, from, to } = req.query;
+      const { coin, coins, currency, currencies, from, to, breakdownDimensions } = req.query;
 
-      // Validate at least one parameter
-      if (!coin && !currency && !from && !to) {
-        return res.status(400).json({
-          success: false,
-          error: 'At least one filter parameter is required (coin, currency, from, to)',
-        });
-      }
+      // Parse parameters - support both single and multiple values
+      const parsedCoins =
+        this.parseMultipleValues(coins as string) || (coin ? [coin as string] : ['bitcoin', 'ethereum']);
+
+      const parsedCurrencies =
+        this.parseMultipleValues(currencies as string) || (currency ? [currency as string] : ['usd', 'try']);
+
+      const parsedBreakdownDimensions = this.parseMultipleValues(breakdownDimensions as string) || ['date'];
 
       // Validate date format if provided
       if (from && !this.isValidDate(from as string)) {
@@ -39,22 +40,42 @@ class PriceRouter {
         });
       }
 
-      const priceData = await this.services.priceDataService.getPriceHistory({
-        coin: coin as string,
-        currency: currency as string,
+      // Validate breakdown dimensions
+      const validDimensions = ['date', 'coin', 'currency'];
+      const invalidDimensions = parsedBreakdownDimensions.filter((dim) => !validDimensions.includes(dim));
+      if (invalidDimensions.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid breakdown dimensions: ${invalidDimensions.join(', ')}. Valid options: ${validDimensions.join(
+            ', '
+          )}`,
+        });
+      }
+
+      // Call the updated service method
+      const processedData = await this.services.priceDataService.getPriceHistory({
+        coins: parsedCoins,
+        currencies: parsedCurrencies,
         from: from as string,
         to: to as string,
+        breakdownDimensions: parsedBreakdownDimensions,
       });
 
-      // Sort by timestamp
-      const sortedData = priceData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      // Sort by date (already sorted in service, but double-check)
+      const sortedData = processedData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       return res.status(200).json({
         success: true,
         data: sortedData,
-        meta: {
+        metadata: {
           count: sortedData.length,
-          filters: { coin, currency, from, to },
+          requestParams: {
+            coins: parsedCoins,
+            currencies: parsedCurrencies,
+            from,
+            to,
+            breakdownDimensions: parsedBreakdownDimensions,
+          },
         },
       });
     } catch (err) {
@@ -64,7 +85,6 @@ class PriceRouter {
 
   async getAvailableCoins(req: Request, res: Response) {
     try {
-      // Hardcoded for now - matches what's in fetchPricesHandler
       const coins = ['bitcoin', 'ethereum'];
 
       res.status(200).json({
@@ -78,7 +98,6 @@ class PriceRouter {
 
   async getAvailableCurrencies(req: Request, res: Response) {
     try {
-      // Hardcoded for now - matches what's in fetchPricesHandler
       const currencies = ['usd', 'eur', 'try'];
 
       res.status(200).json({
@@ -88,6 +107,15 @@ class PriceRouter {
     } catch (err) {
       res.status(500).json(this.handleError(err));
     }
+  }
+
+  // Helper method to parse comma-separated values
+  private parseMultipleValues(value: string | undefined): string[] | undefined {
+    if (!value) return undefined;
+    return value
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
   }
 
   private isValidDate(dateString: string): boolean {

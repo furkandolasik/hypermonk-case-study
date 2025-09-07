@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Select, DatePicker, Checkbox, Table, Spin, message, Typography } from 'antd';
+import { Row, Col, Card, Select, DatePicker, Checkbox, Table, Spin, message, Typography, Tabs } from 'antd';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import type { ColumnsType } from 'antd/lib/table';
 import dayjs from 'dayjs';
 import api from '../../api';
@@ -8,11 +9,15 @@ import ConsoleLayout from '../Layout/ConsoleLayout';
 const { RangePicker } = DatePicker;
 const { Title } = Typography;
 
-interface PriceData {
-  coin_id: string;
-  currency: string;
-  timestamp: string;
+// Updated interface for processed data from API
+interface ProcessedDataPoint {
+  date: string;
+  coin?: string;
+  currency?: string;
   price: number;
+  sourceRecords?: number;
+  aggregatedCoins?: string[];
+  aggregatedCurrencies?: string[];
 }
 
 interface DashboardFilters {
@@ -22,18 +27,24 @@ interface DashboardFilters {
   breakdownDimensions: string[];
 }
 
+interface ChartDataPoint {
+  date: string;
+  [key: string]: string | number;
+}
+
 interface TableDataPoint {
   key: string;
   coin?: string;
   currency?: string;
   date: string;
   price: number;
+  [key: string]: any;
 }
 
 const CryptoDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [priceData, setPriceData] = useState<PriceData[]>([]);
   const [tableData, setTableData] = useState<TableDataPoint[]>([]);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
 
   const [availableCoins, setAvailableCoins] = useState<string[]>([]);
   const [availableCurrencies, setAvailableCurrencies] = useState<string[]>([]);
@@ -80,32 +91,23 @@ const CryptoDashboard: React.FC = () => {
 
     setLoading(true);
     try {
-      const promises = [];
-
-      for (const coin of filters.coins) {
-        for (const currency of filters.currencies) {
-          const params = new URLSearchParams({
-            coin,
-            currency,
-            from: filters.dateRange[0].toISOString(),
-            to: filters.dateRange[1].toISOString(),
-          });
-
-          promises.push(api.get(`/v1/prices?${params}`));
-        }
-      }
-
-      const responses = await Promise.all(promises);
-      const allData: PriceData[] = [];
-
-      responses.forEach((response) => {
-        if (response.data.success) {
-          allData.push(...response.data.data);
-        }
+      const params = new URLSearchParams({
+        coins: filters.coins.join(','),
+        currencies: filters.currencies.join(','),
+        from: filters.dateRange[0].toISOString(),
+        to: filters.dateRange[1].toISOString(),
+        breakdownDimensions: filters.breakdownDimensions.join(','),
       });
 
-      setPriceData(allData);
-      processDataForVisualization(allData);
+      const response = await api.get(`/v1/prices?${params}`);
+
+      if (response.data.success) {
+        const apiData = response.data.data;
+        prepareTableData(apiData);
+        prepareChartData(apiData);
+      } else {
+        message.error('Failed to fetch price data');
+      }
     } catch (error) {
       message.error('Failed to fetch price data');
       console.error('Error fetching price data:', error);
@@ -114,151 +116,132 @@ const CryptoDashboard: React.FC = () => {
     }
   };
 
-  const processDataForVisualization = (data: PriceData[]) => {
+  // Prepare table data from processed API data
+  const prepareTableData = (data: ProcessedDataPoint[]) => {
     if (data.length === 0) {
       setTableData([]);
       return;
     }
 
-    console.log('Raw data:', data);
-    console.log('Breakdown dimensions:', filters.breakdownDimensions);
-
-    const daysDiff = filters.dateRange ? filters.dateRange[1].diff(filters.dateRange[0], 'days') : 0;
-    const useHourly = daysDiff <= 2;
-
-    // Check if "Date only" case
     const isDateOnly = filters.breakdownDimensions.length === 1 && filters.breakdownDimensions[0] === 'date';
 
     if (isDateOnly) {
-      // Special handling for "Date only" - create rows with dynamic currency columns
-      const groupedByDateAndCoin = new Map<string, Map<string, PriceData>>();
+      // For date-only, group by date
+      const groupedByDate = new Map<string, Map<string, ProcessedDataPoint>>();
 
       data.forEach((item) => {
-        const date = useHourly
-          ? dayjs(item.timestamp).format('YYYY-MM-DD HH:mm')
-          : dayjs(item.timestamp).format('YYYY-MM-DD');
+        const date = item.date.split(' ')[0];
 
-        const key = `${date}_${item.coin_id}`;
-
-        if (!groupedByDateAndCoin.has(key)) {
-          groupedByDateAndCoin.set(key, new Map());
+        if (!groupedByDate.has(date)) {
+          groupedByDate.set(date, new Map());
         }
 
-        groupedByDateAndCoin.get(key)!.set(item.currency, item);
+        const coinKey = item.aggregatedCoins ? item.aggregatedCoins.join(',') : 'Unknown';
+        groupedByDate.get(date)!.set(coinKey, item);
       });
 
-      const tableRows: any[] = [];
+      const tableRows: TableDataPoint[] = [];
 
-      groupedByDateAndCoin.forEach((currencyMap, dateAndCoin) => {
-        const [date, coin] = dateAndCoin.split('_');
+      groupedByDate.forEach((coinMap, date) => {
+        coinMap.forEach((item, coinKey) => {
+          const row: TableDataPoint = {
+            key: `${date}_${coinKey}`,
+            date,
+            price: item.price,
+          };
 
-        const row: any = {
-          key: dateAndCoin,
-          date,
-          coin,
+          // Only add fields for selected breakdown dimensions
+          if (filters.breakdownDimensions.includes('coin')) {
+            row.coin = coinKey;
+          }
+
+          if (filters.breakdownDimensions.includes('currency')) {
+            row.currency = item.currency;
+          }
+
+          tableRows.push(row);
+        });
+      });
+
+      setTableData(tableRows);
+    } else {
+      // Standard table for other breakdown combinations
+      const tableRows: TableDataPoint[] = data.map((item, index) => {
+        const row: TableDataPoint = {
+          key: `${item.date}_${item.coin || 'agg'}_${item.currency || 'agg'}_${index}`,
+          date: item.date.split(' ')[0],
+          price: item.price,
         };
 
-        // Add only price columns for each currency
-        filters.currencies.forEach((currency) => {
-          const currencyData = currencyMap.get(currency);
-          if (currencyData) {
-            row[`price_${currency}`] = currencyData.price;
-          } else {
-            row[`price_${currency}`] = null;
-          }
-        });
+        // Only add fields for selected breakdown dimensions
+        if (filters.breakdownDimensions.includes('coin')) {
+          row.coin = item.coin;
+        }
 
-        tableRows.push(row);
+        if (filters.breakdownDimensions.includes('currency')) {
+          row.currency = item.currency;
+        }
+
+        return row;
       });
 
-      // Sort by date, then by coin
-      tableRows.sort((a, b) => {
-        const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
-        if (dateCompare !== 0) return dateCompare;
-        return (a.coin || '').localeCompare(b.coin || '');
-      });
-
-      console.log('Date-only table data:', tableRows);
       setTableData(tableRows);
+    }
+  };
+
+  // Prepare chart data from processed API data
+  const prepareChartData = (data: ProcessedDataPoint[]) => {
+    if (data.length === 0) {
+      setChartData([]);
       return;
     }
 
-    // Standard grouping for other cases
-    const groupedData = new Map<string, PriceData[]>();
+    const groupedByDate = new Map<string, Map<string, number>>();
 
     data.forEach((item) => {
-      const date = useHourly
-        ? dayjs(item.timestamp).format('YYYY-MM-DD HH:mm')
-        : dayjs(item.timestamp).format('YYYY-MM-DD');
+      const date = item.date;
 
-      let groupKey = date; // Always include date
-
-      // Add dimensions to group key
-      if (filters.breakdownDimensions.includes('coin')) {
-        groupKey += `_${item.coin_id}`;
+      if (!groupedByDate.has(date)) {
+        groupedByDate.set(date, new Map());
       }
 
-      if (filters.breakdownDimensions.includes('currency')) {
-        groupKey += `_${item.currency}`;
+      // Create line key based on breakdown dimensions
+      let lineKey = '';
+      if (item.coin) {
+        lineKey = item.coin;
+      } else if (item.aggregatedCoins) {
+        lineKey = `Avg(${item.aggregatedCoins.join(',')})`;
       }
 
-      if (!groupedData.has(groupKey)) {
-        groupedData.set(groupKey, []);
+      if (item.currency) {
+        lineKey = lineKey ? `${lineKey}_${item.currency}` : item.currency;
+      } else if (item.aggregatedCurrencies) {
+        const currencyPart = `Avg(${item.aggregatedCurrencies.join(',')})`;
+        lineKey = lineKey ? `${lineKey}_${currencyPart}` : currencyPart;
       }
 
-      groupedData.get(groupKey)!.push(item);
+      if (!lineKey) {
+        lineKey = 'Average Price';
+      }
+
+      groupedByDate.get(date)!.set(lineKey, item.price);
     });
 
-    // Convert grouped data to table rows
-    const tableRows: TableDataPoint[] = [];
+    // Convert to chart format
+    const chartRows: ChartDataPoint[] = [];
 
-    groupedData.forEach((items, groupKey) => {
-      const firstItem = items[0];
-      const date = useHourly
-        ? dayjs(firstItem.timestamp).format('YYYY-MM-DD HH:mm')
-        : dayjs(firstItem.timestamp).format('YYYY-MM-DD');
+    groupedByDate.forEach((lineMap, date) => {
+      const row: ChartDataPoint = { date };
 
-      // Calculate average price for the group
-      const avgPrice = items.reduce((sum, item) => sum + item.price, 0) / items.length;
-
-      // Determine what to show in coin and currency columns
-      let coinDisplay: string | undefined;
-      let currencyDisplay: string | undefined;
-
-      if (filters.breakdownDimensions.includes('coin') && filters.breakdownDimensions.includes('currency')) {
-        // Show specific coin and currency
-        coinDisplay = firstItem.coin_id;
-        currencyDisplay = firstItem.currency;
-      } else if (filters.breakdownDimensions.includes('coin')) {
-        // Show specific coin, aggregate currencies
-        coinDisplay = firstItem.coin_id;
-        const uniqueCurrencies = Array.from(new Set(items.map((i) => i.currency)));
-        currencyDisplay = `Average (${uniqueCurrencies.join(', ')})`;
-      } else if (filters.breakdownDimensions.includes('currency')) {
-        // Show specific currency, aggregate coins
-        const uniqueCoins = Array.from(new Set(items.map((i) => i.coin_id)));
-        coinDisplay = `Average (${uniqueCoins.join(', ')})`;
-        currencyDisplay = firstItem.currency;
-      }
-
-      tableRows.push({
-        key: groupKey,
-        coin: coinDisplay,
-        currency: currencyDisplay,
-        date,
-        price: avgPrice,
+      lineMap.forEach((price, lineKey) => {
+        row[lineKey] = price;
       });
+
+      chartRows.push(row);
     });
 
-    // Sort by date, then by coin
-    tableRows.sort((a, b) => {
-      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
-      if (dateCompare !== 0) return dateCompare;
-      return (a.coin || '').localeCompare(b.coin || '');
-    });
-
-    console.log('Grouped table data:', tableRows);
-    setTableData(tableRows);
+    chartRows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    setChartData(chartRows);
   };
 
   const handleFilterChange = (filterType: keyof DashboardFilters, value: any) => {
@@ -276,45 +259,59 @@ const CryptoDashboard: React.FC = () => {
         key: 'date',
         sorter: (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime(),
       },
-      {
+    ];
+
+    // Only show columns for selected breakdown dimensions
+    if (filters.breakdownDimensions.includes('coin')) {
+      columns.push({
         title: 'Coin',
         dataIndex: 'coin',
         key: 'coin',
         sorter: (a: any, b: any) => (a.coin || '').localeCompare(b.coin || ''),
-      },
-    ];
-
-    // For "Date only" breakdown, add dynamic currency price columns
-    if (filters.breakdownDimensions.length === 1 && filters.breakdownDimensions[0] === 'date') {
-      filters.currencies.forEach((currency) => {
-        columns.push({
-          title: `${currency.toUpperCase()} Price`,
-          dataIndex: `price_${currency}`,
-          key: `price_${currency}`,
-          sorter: (a: any, b: any) => (a[`price_${currency}`] || 0) - (b[`price_${currency}`] || 0),
-          render: (value: number) => (value !== null && value !== undefined ? value.toLocaleString() : 'N/A'),
-        });
       });
-    } else {
-      // Standard columns for other breakdown combinations - only price
-      columns.push(
-        {
-          title: 'Currency',
-          dataIndex: 'currency',
-          key: 'currency',
-          sorter: (a: any, b: any) => (a.currency || '').localeCompare(b.currency || ''),
-        },
-        {
-          title: 'Price',
-          dataIndex: 'price',
-          key: 'price',
-          sorter: (a: any, b: any) => a.price - b.price,
-          render: (value: number) => value?.toLocaleString(),
-        }
-      );
     }
 
+    if (filters.breakdownDimensions.includes('currency')) {
+      columns.push({
+        title: 'Currency',
+        dataIndex: 'currency',
+        key: 'currency',
+        sorter: (a: any, b: any) => (a.currency || '').localeCompare(b.currency || ''),
+      });
+    }
+
+    columns.push({
+      title: 'Price',
+      dataIndex: 'price',
+      key: 'price',
+      sorter: (a: any, b: any) => (a.price || 0) - (b.price || 0),
+      render: (value: number) => {
+        if (value === null || value === undefined || isNaN(value)) return 'N/A';
+        return value.toLocaleString();
+      },
+    });
+
     return columns;
+  };
+
+  const getChartLines = () => {
+    if (chartData.length === 0) return null;
+
+    const sampleData = chartData[0];
+    const lineKeys = Object.keys(sampleData).filter((key) => key !== 'date');
+
+    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#413ea0', '#8dd1e1'];
+
+    return lineKeys.map((key, index) => (
+      <Line
+        key={key}
+        type="monotone"
+        dataKey={key}
+        stroke={colors[index % colors.length]}
+        strokeWidth={2}
+        name={key.replace('_', ' ').toUpperCase()}
+      />
+    ));
   };
 
   return (
@@ -380,8 +377,63 @@ const CryptoDashboard: React.FC = () => {
           </Card>
 
           <Spin spinning={loading}>
-            <Row gutter={[24, 24]}>
-              <Col span={24}>
+            <Tabs defaultActiveKey="chart" type="card">
+              <Tabs.TabPane tab="Chart" key="chart">
+                <Card title="Price Chart">
+                  {chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={400}>
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 12 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                          tickFormatter={(value) => {
+                            if (value.includes(' ')) {
+                              const [date, time] = value.split(' ');
+                              const [year, month, day] = date.split('-');
+                              return `${month}/${day} ${time}`;
+                            } else {
+                              const [year, month, day] = value.split('-');
+                              return `${month}/${day}`;
+                            }
+                          }}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 12 }}
+                          tickFormatter={(value) =>
+                            value > 1000 ? `$${(value / 1000).toFixed(1)}K` : `$${value.toFixed(2)}`
+                          }
+                        />
+                        <Tooltip
+                          formatter={(value: number, name: string) => {
+                            const primaryCurrency = filters.currencies.includes('usd') ? 'usd' : filters.currencies[0];
+                            const symbol = primaryCurrency === 'try' ? '₺' : '$';
+                            return [`${symbol}${value.toLocaleString()}`, name];
+                          }}
+                          labelFormatter={(label) => {
+                            if (typeof label === 'string' && label.includes(' ')) {
+                              const [date, time] = label.split(' ');
+                              return `${date} at ${time}`;
+                            }
+                            return label;
+                          }}
+                        />
+                        <Legend />
+                        {getChartLines()}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      No chart data available
+                    </div>
+                  )}
+                </Card>
+              </Tabs.TabPane>
+
+              <Tabs.TabPane tab="Table" key="table">
                 <Card title="Price Data Table">
                   <Table
                     columns={getTableColumns()}
@@ -395,8 +447,8 @@ const CryptoDashboard: React.FC = () => {
                     scroll={{ x: 800 }}
                   />
                 </Card>
-              </Col>
-            </Row>
+              </Tabs.TabPane>
+            </Tabs>
           </Spin>
         </div>
       }
