@@ -44,7 +44,7 @@ After deployment, populate data using the fetch Lambda:
 - Filter by 10+ cryptocurrencies and multiple currencies
 - Automatic hourly/daily data granularity
 - Drag & drop table columns
-- Real-time data updates every 5 minutes
+- Real-time data updates every 1 hour
 
 ## API Endpoints
 
