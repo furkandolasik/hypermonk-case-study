@@ -60,6 +60,28 @@ resource "aws_dynamodb_table" "price_data" {
   }
 }
 
+resource "aws_dynamodb_table" "coin_table" {
+  name         = "${var.project_name}-Coin"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+}
+
+resource "aws_dynamodb_table" "currency_table" {
+  name         = "${var.project_name}-Currency"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "code"
+
+  attribute {
+    name = "code"
+    type = "S"
+  }
+}
+
 # Build process
 resource "null_resource" "bundle" {
   triggers = {
@@ -175,6 +197,8 @@ resource "aws_lambda_function" "api" {
     variables = {
       PRICE_DATA_TABLE = aws_dynamodb_table.price_data.name
       PROJECT_NAME     = var.project_name
+      COIN_TABLE       = aws_dynamodb_table.coin_table.name
+      CURRENCY_TABLE   = aws_dynamodb_table.currency_table.name
     }
   }
 
@@ -200,6 +224,8 @@ resource "aws_lambda_function" "price_fetcher" {
     variables = {
       PRICE_DATA_TABLE  = aws_dynamodb_table.price_data.name
       COINGECKO_API_KEY = "CG-BVC9WsHt56tCVMvW2AadTR9M"
+      COIN_TABLE        = aws_dynamodb_table.coin_table.name
+      CURRENCY_TABLE    = aws_dynamodb_table.currency_table.name
     }
   }
 
@@ -280,4 +306,162 @@ output "price_fetcher_function_name" {
 output "price_data_table_name" {
   value       = aws_dynamodb_table.price_data.name
   description = "DynamoDB table name for price data"
+}
+
+# Top 10 Cryptocurrencies
+resource "aws_dynamodb_table_item" "coin_bitcoin" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "bitcoin" }
+    name      = { S = "Bitcoin" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_ethereum" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "ethereum" }
+    name      = { S = "Ethereum" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_tether" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "tether" }
+    name      = { S = "Tether" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_binancecoin" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "binancecoin" }
+    name      = { S = "BNB" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_solana" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "solana" }
+    name      = { S = "Solana" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_usd_coin" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "usd-coin" }
+    name      = { S = "USD Coin" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_ripple" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "ripple" }
+    name      = { S = "XRP" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_dogecoin" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "dogecoin" }
+    name      = { S = "Dogecoin" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_cardano" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "cardano" }
+    name      = { S = "Cardano" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "coin_avalanche" {
+  table_name = aws_dynamodb_table.coin_table.name
+  hash_key   = aws_dynamodb_table.coin_table.hash_key
+
+  item = jsonencode({
+    id        = { S = "avalanche-2" }
+    name      = { S = "Avalanche" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+# Currencies
+resource "aws_dynamodb_table_item" "currency_usd" {
+  table_name = aws_dynamodb_table.currency_table.name
+  hash_key   = aws_dynamodb_table.currency_table.hash_key
+
+  item = jsonencode({
+    code      = { S = "usd" }
+    name      = { S = "US Dollar" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "currency_eur" {
+  table_name = aws_dynamodb_table.currency_table.name
+  hash_key   = aws_dynamodb_table.currency_table.hash_key
+
+  item = jsonencode({
+    code      = { S = "eur" }
+    name      = { S = "Euro" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
+}
+
+resource "aws_dynamodb_table_item" "currency_try" {
+  table_name = aws_dynamodb_table.currency_table.name
+  hash_key   = aws_dynamodb_table.currency_table.hash_key
+
+  item = jsonencode({
+    code      = { S = "try" }
+    name      = { S = "Turkish Lira" }
+    createdAt = { S = "2024-01-01T00:00:00Z" }
+    updatedAt = { S = "2024-01-01T00:00:00Z" }
+  })
 }

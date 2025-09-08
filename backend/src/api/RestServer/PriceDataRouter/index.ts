@@ -16,13 +16,25 @@ class PriceRouter {
     try {
       const { coin, coins, currency, currencies, from, to, breakdownDimensions } = req.query;
 
-      const parsedCoins =
-        this.parseMultipleValues(coins as string) || (coin ? [coin as string] : ['bitcoin', 'ethereum']);
-
+      const parsedCoins = this.parseMultipleValues(coins as string) || (coin ? [coin as string] : undefined);
       const parsedCurrencies =
-        this.parseMultipleValues(currencies as string) || (currency ? [currency as string] : ['usd', 'try']);
-
+        this.parseMultipleValues(currencies as string) || (currency ? [currency as string] : undefined);
       const parsedBreakdownDimensions = this.parseMultipleValues(breakdownDimensions as string) || ['date'];
+
+      // Validation - coins and currencies are now required
+      if (!parsedCoins || parsedCoins.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'At least one coin must be specified (coins parameter required)',
+        });
+      }
+
+      if (!parsedCurrencies || parsedCurrencies.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'At least one currency must be specified (currencies parameter required)',
+        });
+      }
 
       // Validate date format if provided
       if (from && !this.isValidDate(from as string)) {
@@ -78,32 +90,6 @@ class PriceRouter {
     }
   }
 
-  async getAvailableCoins(req: Request, res: Response) {
-    try {
-      const coins = ['bitcoin', 'ethereum'];
-
-      res.status(200).json({
-        success: true,
-        data: coins.map((coin) => ({ id: coin, name: coin })),
-      });
-    } catch (err) {
-      res.status(500).json(this.handleError(err));
-    }
-  }
-
-  async getAvailableCurrencies(req: Request, res: Response) {
-    try {
-      const currencies = ['usd', 'eur', 'try'];
-
-      res.status(200).json({
-        success: true,
-        data: currencies.map((currency) => ({ code: currency, name: currency.toUpperCase() })),
-      });
-    } catch (err) {
-      res.status(500).json(this.handleError(err));
-    }
-  }
-
   private parseMultipleValues(value: string | undefined): string[] | undefined {
     if (!value) return undefined;
     return value
@@ -128,8 +114,6 @@ class PriceRouter {
   getRouter(): Router {
     const router = Router();
     router.get('/', (req, res) => this.getPrices(req, res));
-    router.get('/coins', (req, res) => this.getAvailableCoins(req, res));
-    router.get('/currencies', (req, res) => this.getAvailableCurrencies(req, res));
     return router;
   }
 }

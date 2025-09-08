@@ -40,17 +40,27 @@ interface TableDataPoint {
   [key: string]: any;
 }
 
+interface Coin {
+  id: string;
+  name: string;
+}
+
+interface Currency {
+  code: string;
+  name: string;
+}
+
 const CryptoDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [tableData, setTableData] = useState<TableDataPoint[]>([]);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
 
-  const [availableCoins, setAvailableCoins] = useState<string[]>([]);
-  const [availableCurrencies, setAvailableCurrencies] = useState<string[]>([]);
+  const [availableCoins, setAvailableCoins] = useState<Coin[]>([]);
+  const [availableCurrencies, setAvailableCurrencies] = useState<Currency[]>([]);
 
   const [filters, setFilters] = useState<DashboardFilters>({
-    coins: ['bitcoin', 'ethereum'],
-    currencies: ['usd', 'try'],
+    coins: [],
+    currencies: [],
     dateRange: [dayjs().subtract(7, 'days'), dayjs()],
     breakdownDimensions: ['date'],
   });
@@ -65,17 +75,31 @@ const CryptoDashboard: React.FC = () => {
 
   const fetchAvailableOptions = async () => {
     try {
-      const [coinsRes, currenciesRes] = await Promise.all([
-        api.get('/v1/prices/coins'),
-        api.get('/v1/prices/currencies'),
-      ]);
+      const [coinsRes, currenciesRes] = await Promise.all([api.get('/v1/coins'), api.get('/v1/currencies')]);
 
       if (coinsRes.data.success) {
-        setAvailableCoins(coinsRes.data.data.map((coin: any) => coin.id));
+        setAvailableCoins(coinsRes.data.data);
+
+        const defaultCoins = coinsRes.data.data.slice(0, 2).map((coin: Coin) => coin.id);
+        setFilters((prev) => ({
+          ...prev,
+          coins: defaultCoins,
+        }));
       }
 
       if (currenciesRes.data.success) {
-        setAvailableCurrencies(currenciesRes.data.data.map((currency: any) => currency.code));
+        setAvailableCurrencies(currenciesRes.data.data);
+
+        const allCurrencies = currenciesRes.data.data.map((c: Currency) => c.code);
+        const defaultCurrencies = ['usd', 'try'].filter((code) => allCurrencies.includes(code));
+        if (defaultCurrencies.length === 0) {
+          defaultCurrencies.push(allCurrencies[0]);
+        }
+
+        setFilters((prev) => ({
+          ...prev,
+          currencies: defaultCurrencies,
+        }));
       }
     } catch (error) {
       message.error('Failed to fetch available options');
@@ -169,11 +193,13 @@ const CryptoDashboard: React.FC = () => {
         };
 
         if (filters.breakdownDimensions.includes('coin')) {
-          row.coin = item.coin;
+          const coin = availableCoins.find((c) => c.id === item.coin);
+          row.coin = coin ? coin.name : item.coin;
         }
 
         if (filters.breakdownDimensions.includes('currency')) {
-          row.currency = item.currency;
+          const currency = availableCurrencies.find((c) => c.code === item.currency);
+          row.currency = currency ? currency.name : item.currency?.toUpperCase();
         }
 
         return row;
@@ -200,15 +226,26 @@ const CryptoDashboard: React.FC = () => {
 
       let lineKey = '';
       if (item.coin) {
-        lineKey = item.coin;
+        const coin = availableCoins.find((c) => c.id === item.coin);
+        lineKey = coin ? coin.name : item.coin;
       } else if (item.aggregatedCoins) {
-        lineKey = `Avg(${item.aggregatedCoins.join(',')})`;
+        const coinNames = item.aggregatedCoins.map((coinId) => {
+          const coin = availableCoins.find((c) => c.id === coinId);
+          return coin ? coin.name : coinId;
+        });
+        lineKey = `Avg(${coinNames.join(',')})`;
       }
 
       if (item.currency) {
-        lineKey = lineKey ? `${lineKey}_${item.currency}` : item.currency;
+        const currency = availableCurrencies.find((c) => c.code === item.currency);
+        const currencyName = currency ? currency.name : item.currency.toUpperCase();
+        lineKey = lineKey ? `${lineKey}_${currencyName}` : currencyName;
       } else if (item.aggregatedCurrencies) {
-        const currencyPart = `Avg(${item.aggregatedCurrencies.join(',')})`;
+        const currencyNames = item.aggregatedCurrencies.map((currencyCode) => {
+          const currency = availableCurrencies.find((c) => c.code === currencyCode);
+          return currency ? currency.name : currencyCode.toUpperCase();
+        });
+        const currencyPart = `Avg(${currencyNames.join(',')})`;
         lineKey = lineKey ? `${lineKey}_${currencyPart}` : currencyPart;
       }
 

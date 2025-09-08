@@ -11,10 +11,20 @@ interface DashboardFilters {
   breakdownDimensions: string[];
 }
 
+interface Coin {
+  id: string;
+  name: string;
+}
+
+interface Currency {
+  code: string;
+  name: string;
+}
+
 interface PriceFiltersProps {
   filters: DashboardFilters;
-  availableCoins: string[];
-  availableCurrencies: string[];
+  availableCoins: Coin[];
+  availableCurrencies: Currency[];
   onFilterChange: (filterType: keyof DashboardFilters, value: any) => void;
 }
 
@@ -25,7 +35,7 @@ const PriceFilters: React.FC<PriceFiltersProps> = ({
   onFilterChange,
 }) => {
   return (
-    <Card title="Filters" style={{ marginBottom: '24px' }}>
+    <Card style={{ marginBottom: '24px' }}>
       <Row gutter={[16, 16]}>
         <Col span={6}>
           <label>Coins:</label>
@@ -35,7 +45,10 @@ const PriceFilters: React.FC<PriceFiltersProps> = ({
             placeholder="Select coins"
             value={filters.coins}
             onChange={(value) => onFilterChange('coins', value)}
-            options={availableCoins.map((coin) => ({ label: coin.toUpperCase(), value: coin }))}
+            options={availableCoins.map((coin) => ({
+              label: coin.name,
+              value: coin.id,
+            }))}
           />
         </Col>
 
@@ -48,8 +61,8 @@ const PriceFilters: React.FC<PriceFiltersProps> = ({
             value={filters.currencies}
             onChange={(value) => onFilterChange('currencies', value)}
             options={availableCurrencies.map((currency) => ({
-              label: currency.toUpperCase(),
-              value: currency,
+              label: currency.name,
+              value: currency.code,
             }))}
           />
         </Col>

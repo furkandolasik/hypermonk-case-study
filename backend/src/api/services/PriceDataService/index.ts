@@ -28,13 +28,15 @@ class PriceDataService {
     to?: string;
     breakdownDimensions?: string[];
   }) {
-    const {
-      coins = ['bitcoin', 'ethereum'],
-      currencies = ['usd', 'try'],
-      from,
-      to,
-      breakdownDimensions = ['date'],
-    } = params;
+    const { coins, currencies, from, to, breakdownDimensions = ['date'] } = params;
+
+    if (!coins || coins.length === 0) {
+      throw new Error('At least one coin must be specified');
+    }
+
+    if (!currencies || currencies.length === 0) {
+      throw new Error('At least one currency must be specified');
+    }
 
     // Fetch raw data for all coin-currency combinations
     const rawData: PriceData[] = [];

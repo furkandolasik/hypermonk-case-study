@@ -1,9 +1,15 @@
 import express, { Request, Response } from 'express';
 import PriceDataService from '../services/PriceDataService';
+import CoinService from '../services/CoinService';
+import CurrencyService from '../services/CurrencyService';
 import PriceRouter from './PriceDataRouter';
+import CoinsRouter from './CoinsRouter';
+import CurrenciesRouter from './CurrenciesRouter';
 
 interface RestServerServices {
   priceDataService: PriceDataService;
+  coinService: CoinService;
+  currencyService: CurrencyService;
 }
 
 class RestServer {
@@ -22,6 +28,8 @@ class RestServer {
 
     // API Routes
     router.use('/prices', PriceRouter.create(this.services).getRouter());
+    router.use('/coins', CoinsRouter.create(this.services).getRouter());
+    router.use('/currencies', CurrenciesRouter.create(this.services).getRouter());
 
     // Health check
     router.get('/health', (req: Request, res: Response) => {
