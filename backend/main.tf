@@ -126,29 +126,31 @@ resource "aws_iam_role" "default" {
     ]
   })
 
-  inline_policy {
-    name = "${var.project_name}-CryptoLambdaPolicy"
-    policy = jsonencode({
-      Version = "2012-10-17",
-      Statement = [
-        {
-          Effect = "Allow",
-          Action = [
-            "logs:CreateLogStream",
-            "logs:CreateLogGroup",
-            "logs:PutLogEvents",
-            "dynamodb:*",
-          ],
-          Resource = "*"
-        }
-      ]
-    })
-  }
-
   tags = {
     Name    = "${var.project_name}-lambda-role"
     Project = var.project_name
   }
+}
+
+resource "aws_iam_role_policy" "lambda_policy" {
+  name = "${var.project_name}-CryptoLambdaPolicy"
+  role = aws_iam_role.default.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogStream",
+          "logs:CreateLogGroup",
+          "logs:PutLogEvents",
+          "dynamodb:*",
+        ],
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 # API Gateway
@@ -214,7 +216,7 @@ resource "aws_lambda_function" "price_fetcher" {
   role          = aws_iam_role.default.arn
   handler       = "fetchPricesHandler.handler"
   runtime       = "nodejs18.x"
-  timeout       = 60
+  timeout       = 600
   memory_size   = 512
 
   filename         = data.archive_file.handlers.output_path
