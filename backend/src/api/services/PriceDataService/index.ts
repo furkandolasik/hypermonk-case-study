@@ -213,7 +213,6 @@ class PriceDataService {
     };
   }
 
-  // Keep existing methods for scheduled lambda
   async fetchAndStorePrices(coins: string[], currencies: string[]) {
     const items = [];
 

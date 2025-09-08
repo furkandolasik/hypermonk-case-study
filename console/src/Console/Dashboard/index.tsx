@@ -7,8 +7,6 @@ import PriceFilters from './PriceFilters';
 import PriceChart from './PriceChart';
 import PriceTable from './PriceTable';
 
-const { Title } = Typography;
-
 interface ProcessedDataPoint {
   date: string;
   coin?: string;

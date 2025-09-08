@@ -10,7 +10,7 @@ const LayoutFooter = () => {
         <Text
           style={{
             fontSize: 14,
-          }}>{`COPYRIGHT ${new Date().getFullYear()}. Tüm hakları saklıdır`}</Text>
+          }}>{`COPYRIGHT ${new Date().getFullYear()}. All rights reserved.`}</Text>
       </Flex>
     </Footer>
   );
