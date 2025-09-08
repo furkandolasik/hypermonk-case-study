@@ -16,7 +16,6 @@ class PriceRouter {
     try {
       const { coin, coins, currency, currencies, from, to, breakdownDimensions } = req.query;
 
-      // Parse parameters - support both single and multiple values
       const parsedCoins =
         this.parseMultipleValues(coins as string) || (coin ? [coin as string] : ['bitcoin', 'ethereum']);
 
@@ -52,8 +51,7 @@ class PriceRouter {
         });
       }
 
-      // Call the updated service method
-      const processedData = await this.services.priceDataService.getPriceHistory({
+      const data = await this.services.priceDataService.getPriceHistory({
         coins: parsedCoins,
         currencies: parsedCurrencies,
         from: from as string,
@@ -61,14 +59,11 @@ class PriceRouter {
         breakdownDimensions: parsedBreakdownDimensions,
       });
 
-      // Sort by date (already sorted in service, but double-check)
-      const sortedData = processedData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
       return res.status(200).json({
         success: true,
-        data: sortedData,
+        data,
         metadata: {
-          count: sortedData.length,
+          count: data.length,
           requestParams: {
             coins: parsedCoins,
             currencies: parsedCurrencies,
@@ -109,7 +104,6 @@ class PriceRouter {
     }
   }
 
-  // Helper method to parse comma-separated values
   private parseMultipleValues(value: string | undefined): string[] | undefined {
     if (!value) return undefined;
     return value

@@ -21,7 +21,6 @@ class PriceDataService {
     return new PriceDataService(repos);
   }
 
-  // Get processed price history for frontend API
   async getPriceHistory(params: {
     coins?: string[];
     currencies?: string[];
@@ -62,7 +61,6 @@ class PriceDataService {
     return this.processDataForAPI(rawData, breakdownDimensions, from, to);
   }
 
-  // Process raw data into aggregated format
   private processDataForAPI(
     rawData: PriceData[],
     breakdownDimensions: string[],
@@ -71,18 +69,15 @@ class PriceDataService {
   ): ProcessedDataPoint[] {
     if (rawData.length === 0) return [];
 
-    // Determine if we should use hourly or daily aggregation
     const daysDiff =
       fromDate && toDate
         ? Math.ceil((new Date(toDate).getTime() - new Date(fromDate).getTime()) / (1000 * 60 * 60 * 24))
         : 7;
     const useHourly = daysDiff <= 2;
 
-    // Group data based on breakdown dimensions and time period
     const groups = new Map<string, PriceData[]>();
 
     rawData.forEach((item) => {
-      // Format timestamp based on granularity
       const date = new Date(item.timestamp);
       const timeKey = useHourly
         ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(
@@ -94,7 +89,6 @@ class PriceDataService {
             '0'
           )}`;
 
-      // Create grouping key based on breakdown dimensions
       const keyParts = [timeKey];
 
       if (breakdownDimensions.includes('coin')) {
@@ -112,23 +106,19 @@ class PriceDataService {
       groups.get(groupKey)!.push(item);
     });
 
-    // Process each group and calculate averages
     const processedData: ProcessedDataPoint[] = [];
 
     groups.forEach((items, groupKey) => {
       const keyParts = groupKey.split('|');
       const timeKey = keyParts[0];
 
-      // Calculate average price for this group
       const avgPrice = items.reduce((sum, item) => sum + item.price, 0) / items.length;
 
-      // Create the processed data point
       const dataPoint: ProcessedDataPoint = {
         date: timeKey,
         price: avgPrice,
       };
 
-      // Add breakdown-specific properties
       let partIndex = 1;
       if (breakdownDimensions.includes('coin')) {
         dataPoint.coin = keyParts[partIndex];
@@ -139,10 +129,8 @@ class PriceDataService {
         partIndex++;
       }
 
-      // Add metadata about the aggregation
       dataPoint.sourceRecords = items.length;
 
-      // If we're aggregating across multiple coins/currencies, show which ones
       if (!breakdownDimensions.includes('coin')) {
         const uniqueCoins = Array.from(new Set(items.map((i) => i.coin_id)));
         dataPoint.aggregatedCoins = uniqueCoins;
@@ -155,7 +143,6 @@ class PriceDataService {
       processedData.push(dataPoint);
     });
 
-    // Sort by date, then by coin, then by currency
     processedData.sort((a, b) => {
       const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
       if (dateCompare !== 0) return dateCompare;
@@ -175,7 +162,6 @@ class PriceDataService {
     return processedData;
   }
 
-  // Build filter predicate using the adapter's filter system
   private buildFilterPredicate(params: { currencies?: string[]; from?: string; to?: string }) {
     const conditions = [];
 
@@ -187,7 +173,6 @@ class PriceDataService {
           rhs: params.currencies[0],
         });
       } else {
-        // Multiple currencies - create OR condition
         const currencyConditions = params.currencies.map((currency) => ({
           operator: '=' as const,
           lhs: { name: 'currency' },

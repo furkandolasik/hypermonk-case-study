@@ -1,6 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Table } from 'antd';
 import type { ColumnsType } from 'antd/lib/table';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { MenuOutlined } from '@ant-design/icons';
 
 interface TableDataPoint {
   key: string;
@@ -16,9 +26,41 @@ interface PriceTableProps {
   breakdownDimensions: string[];
 }
 
+const DraggableHeaderCell = ({ children, id, ...restProps }: any) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    cursor: 'move',
+  };
+
+  return (
+    <th {...restProps} ref={setNodeRef} style={{ ...restProps.style, ...style }} {...attributes} {...listeners}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <MenuOutlined style={{ marginRight: '8px', color: '#999' }} />
+        {children}
+      </div>
+    </th>
+  );
+};
+
 const PriceTable: React.FC<PriceTableProps> = ({ tableData, breakdownDimensions }) => {
-  const getTableColumns = (): ColumnsType<any> => {
-    const columns: ColumnsType<any> = [
+  const [columns, setColumns] = useState<ColumnsType<any>>([]);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  useEffect(() => {
+    setColumns(getInitialColumns());
+  }, [breakdownDimensions]);
+
+  const getInitialColumns = (): ColumnsType<any> => {
+    const initialColumns: ColumnsType<any> = [
       {
         title: 'Date',
         dataIndex: 'date',
@@ -27,9 +69,8 @@ const PriceTable: React.FC<PriceTableProps> = ({ tableData, breakdownDimensions 
       },
     ];
 
-    // Only show columns for selected breakdown dimensions
     if (breakdownDimensions.includes('coin')) {
-      columns.push({
+      initialColumns.push({
         title: 'Coin',
         dataIndex: 'coin',
         key: 'coin',
@@ -38,7 +79,7 @@ const PriceTable: React.FC<PriceTableProps> = ({ tableData, breakdownDimensions 
     }
 
     if (breakdownDimensions.includes('currency')) {
-      columns.push({
+      initialColumns.push({
         title: 'Currency',
         dataIndex: 'currency',
         key: 'currency',
@@ -46,7 +87,7 @@ const PriceTable: React.FC<PriceTableProps> = ({ tableData, breakdownDimensions 
       });
     }
 
-    columns.push({
+    initialColumns.push({
       title: 'Price',
       dataIndex: 'price',
       key: 'price',
@@ -57,22 +98,44 @@ const PriceTable: React.FC<PriceTableProps> = ({ tableData, breakdownDimensions 
       },
     });
 
-    return columns;
+    return initialColumns;
   };
 
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+
+    if (active.id !== over.id) {
+      const oldIndex = columns.findIndex((col) => col.key === active.id);
+      const newIndex = columns.findIndex((col) => col.key === over.id);
+
+      setColumns(arrayMove(columns, oldIndex, newIndex));
+    }
+  };
+
+  const columnsWithDrag = columns.map((col) => ({
+    ...col,
+    onHeaderCell: () =>
+      ({
+        id: String(col.key),
+      }) as any,
+  }));
+
   return (
-    <Card title="Price Data Table">
-      <Table
-        columns={getTableColumns()}
-        dataSource={tableData}
-        pagination={{
-          pageSize: 10,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`,
-        }}
-        scroll={{ x: 800 }}
-      />
+    <Card>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={columns.map((col) => String(col.key))} strategy={horizontalListSortingStrategy}>
+          <Table
+            columns={columnsWithDrag}
+            dataSource={tableData}
+            scroll={{ x: 800 }}
+            components={{
+              header: {
+                cell: DraggableHeaderCell,
+              },
+            }}
+          />
+        </SortableContext>
+      </DndContext>
     </Card>
   );
 };

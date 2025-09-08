@@ -60,7 +60,7 @@ const CryptoDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchPriceData();
+    fetchData();
   }, [filters]);
 
   const fetchAvailableOptions = async () => {
@@ -83,7 +83,7 @@ const CryptoDashboard: React.FC = () => {
     }
   };
 
-  const fetchPriceData = async () => {
+  const fetchData = async () => {
     if (!filters.dateRange || filters.coins.length === 0 || filters.currencies.length === 0) {
       return;
     }
@@ -105,11 +105,11 @@ const CryptoDashboard: React.FC = () => {
         prepareTableData(apiData);
         prepareChartData(apiData);
       } else {
-        message.error('Failed to fetch price data');
+        message.error('Failed to fetch data');
       }
     } catch (error) {
-      message.error('Failed to fetch price data');
-      console.error('Error fetching price data:', error);
+      message.error('Failed to fetch data');
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
